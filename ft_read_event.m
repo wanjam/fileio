@@ -402,22 +402,44 @@ switch eventformat
     
     % get the respective status and trigger bits
     trigger = bitand(sdata, bitor(byte1, byte2)); % this is contained in the lower two bytes
+    %----------------------------------------------------------------------------
+    %custom addon to split the 16bit trigger in low and high-byte channels
+    %(WANJA MOESSING 05/07/2016)
+    %WM added vectorized version on 16/09/2016 (~10x faster)
+    binTrig=dec2bin(trigger(1,:),16);
+    trigger(2,:) = bin2dec(binTrig(:,1:8));
+    trigger(3,:) = bin2dec(binTrig(:,9:16));
     epoch   = int8(bitget(sdata, 16+1));
     cmrange = int8(bitget(sdata, 20+1));
     battery = int8(bitget(sdata, 22+1));
     
     % determine when the respective status bits go up or down
-    flank_trigger = diff([0 trigger]);
+    %flank_trigger = diff([0 trigger]);
+    %----------------------------------------------------------------------------
+    %custom addon to split the 16bit trigger in low and high-byte channels
+    %(WANJA MOESSING 05/07/2016)
+    flank_triggerlow = diff([0 trigger(2,:)]);
+    flank_triggerhigh = diff([0 trigger(3,:)]);
+    %----------------------------------------------------------------------------
     flank_epoch   = diff([0 epoch ]);
     flank_cmrange = diff([0 cmrange]);
     flank_battery = diff([0 battery]);
     
-    for i=find(flank_trigger>0)
+    % note that the labels do not match the variable-names because what is
+    % low and waht is high differs between fieldtrip and biosemi.
+    for i=find(flank_triggerhigh>0)
       event(end+1).type   = 'STATUS';
+      event(end  ).device = 'lowbyte-PC';
       event(end  ).sample = i + begsample - 1;
-      event(end  ).value  = double(trigger(i));
+      event(end  ).value  = double(trigger(3,i));
     end
     
+    for i=find(flank_triggerlow>0)
+      event(end+1).type   = 'STATUS';
+      event(end  ).device = 'highbyte-VPixx';
+      event(end  ).sample = i + begsample - 1;
+      event(end  ).value  = double(trigger(2,i));
+    end
     for i=find(flank_epoch==1)
       event(end+1).type   = 'Epoch';
       event(end  ).sample = i;
